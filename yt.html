@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Player</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#000}iframe{display:block;width:100%;height:100%;border:0}</style>
+</head>
+<body>
+<script>
+/* Curl Browser's YouTube helper. YouTube's player won't start in a page opened from disk (Error 153: it needs a
+   referring website), so the single file frames this page, which frames the player. Served as /yt.html on the Wasmer
+   site and as oleg-khrustalev.github.io/cb-player/ (see README). ?v=<11-character video id>&t=<start seconds> */
+(function () {
+  var q = new URLSearchParams(location.search), v = q.get('v') || '', t = q.get('t') || '', f = null;
+  // the privacy-mode player first, then the regular one: some school filters block youtube-nocookie.com but not
+  // youtube.com. A player that loaded answers the embed API's "listening" call; a blocked one never does. The host
+  // that worked last is tried first.
+  var HOSTS = ['https://www.youtube-nocookie.com', 'https://www.youtube.com'], good = null;
+  try { good = localStorage.getItem('cb-yt-host'); } catch (e) {}
+  if (HOSTS.indexOf(good) > 0) HOSTS = [good].concat(HOSTS.filter(function (h) { return h !== good; }));
+  function play(i) {
+    if (f) f.remove();
+    var answered = false, poke, timer;
+    f = document.createElement('iframe');
+    f.title = 'YouTube video player';
+    f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen; clipboard-write';
+    f.allowFullscreen = true;
+    f.referrerPolicy = 'strict-origin-when-cross-origin';
+    // a site sending COEP only lets a cross-origin player in as credentialless (Wasmer serves this page without it)
+    f.setAttribute('credentialless', '');
+    f.src = HOSTS[i] + '/embed/' + v + '?autoplay=1&rel=0&playsinline=1&enablejsapi=1&origin=' + encodeURIComponent(location.origin) +
+      (/^\d+$/.test(t) && t !== '0' ? '&start=' + t : '');
+    var me = f;
+    function on(e) {
+      if (e.source !== me.contentWindow || e.origin !== HOSTS[i]) return;
+      answered = true; clearInterval(poke); clearTimeout(timer); removeEventListener('message', on);
+      try { localStorage.setItem('cb-yt-host', HOSTS[i]); } catch (x) {}
+    }
+    addEventListener('message', on);
+    poke = setInterval(function () { try { me.contentWindow.postMessage('{"event":"listening","id":1,"channel":"widget"}', '*'); } catch (x) {} }, 400);
+    timer = setTimeout(function () {
+      clearInterval(poke); removeEventListener('message', on);
+      if (!answered && i + 1 < HOSTS.length) play(i + 1);
+    }, 6000);
+    document.body.appendChild(f);
+  }
+  if (/^[\w-]{11}$/.test(v)) play(0);
+  // the file waits for this before showing the frame (a school filter's block page never sends it). Commands from the
+  // file (its panic key's pauseVideo, the music player's play/pause/next) go down to the player, and the player's
+  // reports (state, time, length) go back up, so the file can drive the player as if it framed it directly
+  addEventListener('message', function (e) {
+    if (!f) return;
+    if (e.source === parent && typeof e.data === 'string') f.contentWindow.postMessage(e.data, '*');
+    else if (e.source === f.contentWindow && parent !== window) parent.postMessage(e.data, '*');
+  });
+  parent.postMessage({ cbYt: 1 }, '*');
+})();
+</script>
+</body>
+</html>

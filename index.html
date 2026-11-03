@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Curl Browser</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%238b5cf6'/%3E%3C/svg%3E">
+<style>
+:root{color-scheme:dark;--bg:#0b0d13;--card:#151925;--line:#2a3042;--ink:#eef1f8;--mute:#9aa3b8;--acc:#8b5cf6;--acc2:#22d3ee;--bad:#f87171}
+html,body{margin:0;height:100%}
+body{display:grid;place-items:center;padding:16px;box-sizing:border-box;background:radial-gradient(circle at 50% 35%,#1d1838,var(--bg) 70%);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+form{width:min(380px,100%);text-align:center}
+svg{width:72px;height:72px;margin:0 auto 16px;display:block;filter:drop-shadow(0 12px 28px rgba(124,58,237,.45))}
+h1{margin:0 0 4px;font-size:26px;letter-spacing:-.02em}
+p{margin:0 0 20px;color:var(--mute)}
+input[type=password]{box-sizing:border-box;width:100%;height:48px;padding:0 16px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:inherit;font-size:16px;outline:none}
+input[type=password]:focus{border-color:var(--acc)}
+label{display:flex;align-items:center;justify-content:center;gap:8px;margin:12px 0 16px;color:var(--mute);font-size:13.5px;cursor:pointer}
+button{appearance:none;border:0;border-radius:12px;width:100%;padding:14px 20px;font:inherit;font-size:16px;font-weight:600;color:#fff;cursor:pointer;background:linear-gradient(135deg,var(--acc2),var(--acc))}
+button:disabled{opacity:.6;cursor:wait}
+#msg{min-height:1.5em;margin:14px 0 0;font-size:13.5px}
+#msg.bad{color:var(--bad)}
+</style>
+</head>
+<body>
+<form id="f" autocomplete="off" hidden>
+<svg viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#g)"/><rect x="20" y="29" width="24" height="18" rx="4" fill="#fff"/><path d="M25 29v-5a7 7 0 0 1 14 0v5" stroke="#fff" stroke-width="4" fill="none"/></svg>
+<h1>Curl Browser</h1>
+<p>Enter the password to continue.</p>
+<input type="password" id="pw" placeholder="Password" aria-label="Password" required>
+<label><input type="checkbox" id="rem"> Remember on this computer</label>
+<button id="go">Unlock</button>
+<p id="msg" role="status"></p>
+</form>
+<script>
+/* The Wasmer site's login (build.js serves it in place of the browser). Wasmer's edge passes no cookies, so the site
+   key, sha256 of 'curl-browser-site:' + the password, goes in the address instead: this page fetches the browser's page
+   as /?k=<key> and writes it in here, so the address bar keeps showing just the site. The key is kept for this tab
+   (sessionStorage 'cb-site') and, with "Remember on this computer", in localStorage ('cb:siteKey'); the menu's "Lock"
+   forgets both (tools.js). */
+/* On GitHub Pages (STATIC, set by build.js) nothing can check a key, so the page is stored encrypted instead (page.bin:
+   12 bytes of IV, then AES-256-GCM of the gzipped page, keyed by the site key itself), and this page unlocks it. The
+   single file's Scramjet mode opens it as /?from=file&k=<key>, so it opens without asking; the key is then taken out
+   of the address. */
+(function () {
+  var STATIC = true;
+  var f = document.getElementById('f'), msg = document.getElementById('msg');
+  var get = function (s, k) { try { return s.getItem(k); } catch (e) { return null; } };
+  var put = function (s, k, v) { try { v == null ? s.removeItem(k) : s.setItem(k, v); } catch (e) {} };
+  function show(text, bad) { f.hidden = false; msg.className = bad ? 'bad' : ''; msg.textContent = text || ''; }
+  async function unseal(url, k) {
+    var r = await fetch(url, { cache: 'no-cache' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var b = new Uint8Array(await r.arrayBuffer()), raw = new Uint8Array(32);
+    for (var i = 0; i < 32; i++) raw[i] = parseInt(k.substr(i * 2, 2), 16);
+    var key = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']), plain;
+    try { plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b.slice(0, 12) }, key, b.slice(12)); } catch (e) { return null; } // the wrong key
+    return new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+  }
+  async function open(k) {
+    if (!/^[0-9a-f]{64}$/.test(k || '')) return null;
+    if (STATIC) return unseal('/page.bin', k);
+    var q = new URLSearchParams(location.search); q.set('k', k);
+    var r = await fetch('/index.html?' + q, { cache: 'no-store' });
+    if (r.status !== 200 || r.headers.get('x-cb-login')) return null;
+    return r.text();
+  }
+  function run(html, k, remember) {
+    put(sessionStorage, 'cb-site', k);
+    if (remember) put(localStorage, 'cb:siteKey', JSON.stringify(k));
+    document.open(); document.write(html); document.close();
+  }
+  (async function tryKept() {
+    var kept = [get(sessionStorage, 'cb-site')];
+    // the key in the address (the single file's Scramjet mode, an embed code): tried first, then taken out of the address
+    if (STATIC) { var q = new URLSearchParams(location.search), qk = q.get('k'); if (qk) { kept.unshift(qk); q.delete('k'); try { history.replaceState(null, '', location.pathname + (String(q) ? '?' + q : '') + location.hash); } catch (e) {} } }
+    try { kept.push(JSON.parse(get(localStorage, 'cb:siteKey'))); } catch (e) {}
+    for (var i = 0; i < kept.length; i++) {
+      if (!kept[i]) continue;
+      try { var html = await open(kept[i]); if (html) return run(html, kept[i], false); } catch (e) { return show('Could not reach the site: ' + e.message, true); }
+    }
+    put(sessionStorage, 'cb-site', null); put(localStorage, 'cb:siteKey', null);
+    show(''); document.getElementById('pw').focus();
+  })();
+  f.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var go = document.getElementById('go'), pw = document.getElementById('pw');
+    go.disabled = true; show('Unlocking…');
+    try {
+      var d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('curl-browser-site:' + pw.value)));
+      var k = Array.prototype.map.call(d, function (b) { return (b < 16 ? '0' : '') + b.toString(16); }).join('');
+      var html = await open(k);
+      if (!html) { go.disabled = false; pw.select(); return show('Wrong password.', true); }
+      run(html, k, document.getElementById('rem').checked);
+    } catch (x) { go.disabled = false; show('Could not open: ' + x.message, true); }
+  });
+})();
+</script>
+</body>
+</html>

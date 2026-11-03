@@ -1,0 +1,17 @@
+<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><title>Fretline</title>
+<body style="margin:0;background:#0b0d13;color:#9aa3b8;font:15px system-ui,sans-serif"><p id="m" style="padding:40vh 20px 0;text-align:center">Loading Fretline…</p>
+<script>
+(async function () {
+  var m = document.getElementById('m'), k = null;
+  try { k = sessionStorage.getItem('cb-site') || JSON.parse(localStorage.getItem('cb:siteKey')); } catch (e) {}
+  if (!/^[0-9a-f]{64}$/.test(k || '')) { m.textContent = 'Open Curl Browser and unlock it first.'; return; }
+  try {
+    var b = new Uint8Array(await (await fetch('app.bin', { cache: 'no-cache' })).arrayBuffer()), raw = new Uint8Array(32);
+    for (var i = 0; i < 32; i++) raw[i] = parseInt(k.substr(i * 2, 2), 16);
+    var key = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);
+    var plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b.slice(0, 12) }, key, b.slice(12));
+    var html = await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+    document.open(); document.write(html); document.close();
+  } catch (e) { m.textContent = 'Couldn’t open Fretline: ' + e.message; }
+})();
+</script>
