@@ -14,10 +14,10 @@
    site and as oleg-khrustalev.github.io/cb-player/ (see README). ?v=<11-character video id>&t=<start seconds> */
 (function () {
   var q = new URLSearchParams(location.search), v = q.get('v') || '', t = q.get('t') || '', f = null;
-  // the privacy-mode player first, then the regular one: some school filters block youtube-nocookie.com but not
-  // youtube.com. A player that loaded answers the embed API's "listening" call; a blocked one never does. The host
+  // youtube.com/embed/<id> first, then the privacy-mode player: school filters block youtube-nocookie.com but not
+  // youtube.com/embed. A player that loaded answers the embed API's "listening" call; a blocked one never does. The host
   // that worked last is tried first.
-  var HOSTS = ['https://www.youtube-nocookie.com', 'https://www.youtube.com'], good = null;
+  var HOSTS = ['https://www.youtube.com', 'https://www.youtube-nocookie.com'], good = null;
   try { good = localStorage.getItem('cb-yt-host'); } catch (e) {}
   if (HOSTS.indexOf(good) > 0) HOSTS = [good].concat(HOSTS.filter(function (h) { return h !== good; }));
   function play(i) {
