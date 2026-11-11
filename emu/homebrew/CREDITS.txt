@@ -1,0 +1,10 @@
+Free homebrew games bundled with Curl Browser's Emulator, unchanged release files from their authors:
+
+ucity.gbc    µCity v1.3, by Antonio Niño Díaz (AntonioND). GPL-3.0-or-later. Source: https://github.com/AntonioND/ucity
+libbet.gb    Libbet and the Magic Floor v0.08, by Damian Yerrick. Zlib license. Source: https://github.com/pinobatch/libbet
+thwaite.nes  Thwaite v0.04, by Damian Yerrick. GPL-3.0. Source: https://github.com/pinobatch/thwaite-nes
+croom.nes    Concentration Room v0.02a, by Damian Yerrick. GPL-3.0. Source: https://github.com/pinobatch/croom-nes
+
+The emulator is EmulatorJS 4.2.3 (https://github.com/EmulatorJS/EmulatorJS, GPL-3.0, see ../LICENSE), with its libretro
+cores from npm (@emulatorjs/core-*): fceumm, snes9x, gambatte, mgba, mupen64plus_next, pcsx_rearmed, genesis_plus_gx,
+melonds. data/emulator.min.js is EmulatorJS's data/src/*.js joined in its loader's order; emulator.min.css is emulator.css.
